@@ -2,8 +2,8 @@ import json
 import time
 from collections import namedtuple
 import datetime
-
-from auth_login import Auth
+import argparse
+import NJUlogin
 
 configFile = "config.json"
 urls = {
@@ -11,8 +11,13 @@ urls = {
 	"check_in": "http://ehallapp.nju.edu.cn/xgfw//sys/yqfxmrjkdkappnju/apply/saveApplyInfos.do",
 }
 
+def timeshift(intime: int | float) -> str:
+    dt = int(time.strftime('%z'))
+    intime -= (dt * 36 - 8 * 3600)
+    return time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(intime))
+
 def check_login(session, location, leave_NJ):
-	r = session.get(urls['health_history'])
+	r = session.get(urls['health_history'], verify=False)
 	try:
 		history = json.loads(r.text)
 		assert history['code'] == '0'
@@ -22,11 +27,18 @@ def check_login(session, location, leave_NJ):
 	print("Login Successfully")
 	wid = history['data'][0]['WID']
 	if location == 'default':
-		location = history['data'][1]['CURR_LOCATION'] # 与昨天的CURR_LOCATION保持一致
+		try:
+			location = history['data'][1]['CURR_LOCATION'] # 与昨天的CURR_LOCATION保持一致
+		except:
+			print('由于昨天没有打卡，无法获取默认打卡地点。请手动设置')
+			exit(-1)
 	if leave_NJ == 'default':
 		leaveNanjing = False
 		for i in range(1,14):
-			nowL = history['data'][i]['CURR_LOCATION']
+			try:
+				nowL = history['data'][i]['CURR_LOCATION']
+			except:
+				continue
 			if '南京市' not in nowL:
 				leaveNanjing = True
 				break
@@ -36,7 +48,7 @@ def check_login(session, location, leave_NJ):
 
 
 def checkin(session, checkin_info):
-	cur_time = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+	cur_time = timeshift(time.time())
 	info_t = namedtuple('Checkin_Info', 
 		['WID', 'CURR_LOCATION', 'IS_TWZC', 'IS_HAS_JKQK', 'JRSKMYS', 'JZRJRSKMYS', 'SFZJLN', 'ZJHSJCSJ']
 	)
@@ -46,7 +58,7 @@ def checkin(session, checkin_info):
 		checkin_url += f'{key}={value}&'
 	checkin_url = checkin_url[:-1]  # drop last &
 
-	r = session.get(checkin_url)
+	r = session.get(checkin_url, verify=False)
 	try:
 		result = json.loads(r.text)
 	except:
@@ -61,13 +73,14 @@ def checkin(session, checkin_info):
 		print("failed, " + cur_time)
 		return False
 
-def main():
-	with open(configFile, "r", encoding='utf-8') as f:
+def main(config: str):
+	with open(config, "r", encoding='utf-8') as f:
 		info = json.load(f)
-		if info['last_RNA'] == 'default':
-			yesterday = datetime.datetime.now() - datetime.timedelta(days=1)
-			info['last_RNA'] = yesterday.strftime("%Y-%m-%d+%H")
-			print('waining: 上次核酸时间未设置，默认为: ' + info['last_RNA'])
+		if info['last_RNA'][:7] == 'default':
+			dtUTC = int(time.strftime('%z')) // 100
+			hours = int(info['last_RNA'][7:]) + dtUTC - 8
+			last_RNA_time = datetime.datetime.now() - datetime.timedelta(hours=hours)
+			info['last_RNA'] = last_RNA_time.strftime("%Y-%m-%d+%H")
 	assert 'student_id' in info, "Expected infomation `User_Agent` not found. Check config.json"
 	assert 'password' in info, "Expected infomation `Cookie` not found. Check config.json"
 	assert 'User_Agent' in info, "Expected infomation `User_Agent` not found. Check config.json"
@@ -79,12 +92,10 @@ def main():
 	assert 'leave_NJ' in info, "Expected infomation `leave_NJ` not found. Check config.json"
 	assert 'last_RNA' in info, "Expected infomation `last_RNA` not found. Check config.json"
 
-	auth = Auth(info['student_id'], info['password'])
-	auth.login_mobile()
-	if not auth.is_login():
-		print(auth.err_msg)
+	pwdlogin = NJUlogin.pwdLogin(info['student_id'], info['password'], headers={'User-Agent': info['User_Agent']}, mobileLogin=True)
+	if not pwdlogin.login(''):
 		return False
-	session = auth.session
+	session = pwdlogin.session
 	session.headers["User-Agent"] = info['User_Agent']
 	session.headers["Accept"] = "application/json, text/plain, */*"
 	session.headers["Accept-Encoding"] = "gzip, deflate"
@@ -108,14 +119,17 @@ def main():
 		info['last_RNA']                     # 上次核酸时间
 	)
 	status = checkin(session, health_status)
-	auth.logout()
+	pwdlogin.logout()
 	return status
 	
 
 if __name__ == '__main__':
-	result = main()
+	parser = argparse.ArgumentParser()
+	parser.add_argument('-c', '--config', help='config file path', default=configFile)
+	args = parser.parse_args()
+	result = main(args.config)
 	if not result:
-		with open(configFile, "r", encoding='utf-8') as f:
+		with open(args.config, "r", encoding='utf-8') as f:
 			info = json.load(f)
 		if 'try_N_times' in info:
 			try:
@@ -130,6 +144,6 @@ if __name__ == '__main__':
 			result = main()
 			N -= 1
 		if not result:
-			cur_time = datetime.datetime.now().strftime("%Y年%m月%d日 %H点%M分%S秒")
+			cur_time = timeshift(time.time())
 			print("failed after try " + str(try_N_times) + " times, " + cur_time)
 			exit(1)

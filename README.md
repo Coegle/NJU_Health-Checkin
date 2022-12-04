@@ -1,6 +1,11 @@
 # NJU_Health-Checkin
 
 ---
+2022-11-13 15: 新增配置文件选择，可部署多个账号；使用[NJUlogin](https://github.com/Do1e/NJUlogin)库进行登录  
+2022-11-04 22: Github Action抽风，更改了一下Python版本，现在可以正常运行了  
+2022-10-29 11: 新增核酸时间配置，新增支持数字格式，表示在打卡时间前`x`小时做了核酸，默认为24  
+2022-10-19 11: 增加时区获取以保证"昨天"的计算方法在不同平台上的正确性  
+2022-09-27 17: 增加并修复14天内离宁选项控制，修复研究生学号长度为10的问题，感谢 [@Coegle](https://github.com/Coegle) 的PR  
 2022-09-03 18: 修复部分同学学号长度为12的问题，感谢 [@i-Pear](https://github.com/i-Pear) 的PR  
 2022-09-02 18: 已修复登录问题，感谢 [@log2dx](https://github.com/log2dx) 的PR  
 2022-09-02 16: 似乎还存在问题，暂时还没有修复  
@@ -11,10 +16,14 @@
 
 * 在config.json中填写`student_id`、`password`、`User_Agent`(见抓包方法)、上次核酸时间(default表示默认昨天做的核酸)、打卡地点(default表示默认昨天的打卡地点，因此地点更新只需在手机上手动打卡一次即可)，其中student_id、password为**必须修改的项目**，其余的可以使用config.json中的默认值，具体介绍见config.json解析
 * 运行`python checkin.py`即可完成打卡一次
-* 若要每天12:00自动运行，请在`contab -e`中添加以下命令：`0 12 * * * cd /path/to/checkin && python checkin.py >> checkin.log 2>&1`
+* 或者`python checkin.py -c config.json`来选择指定的配置文件
+* 若要每天12:00自动运行，请在`crontab -e`中添加以下命令：`0 12 * * * cd /path/to/checkin && python checkin.py >> checkin.log 2>&1`
 * 或自行查找如何设置Windows下的定时任务
 
 **Github Actions**
+
+:rotating_light:**注意，在Github Actions运行时请勿修改`config.json`，否则会造成信息泄露并且！无效！，所有的修改请使用secret**
+
 * 右上角fork本仓库，之后点击`Create fork`
 
 ![1662048592065](image/README/1662048592065.png)
@@ -46,7 +55,7 @@
 * **my_health_code_color**：您今日的苏康码显示颜色
 * **fam_mem_health_code_color**：您共同居住人今日的苏康码显示颜色
 * **leave_NJ**：最近14天是否离宁，"default"表示由程序自动检测最近14天的打卡地址是否含有'南京市'字符串，"0"表示否，"1"表示是
-* **last_RNA**：您的最近一次核酸检测时间，"default"表示默认昨天做的核酸，格式如下："2022-09-01+16"，即2022年9月1日16点
+* **last_RNA**：您的最近一次核酸检测时间，两种设置格式：1. "2022-09-01+16"，即2022年9月1日16点；2. 纯数字，如"24"表示在打卡时间前24小时做了核酸
 * **try_N_times**：若打卡失败的重试次数，不写为默认0(不重试)
 
 **抓包方法**
