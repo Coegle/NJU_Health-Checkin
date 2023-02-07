@@ -93,7 +93,7 @@ def main(config: str):
 	assert 'last_RNA' in info, "Expected infomation `last_RNA` not found. Check config.json"
 	assert 'infection_status' in info, "Expected infomation `infection_status` not found. Check config.json"
 
-	pwdlogin = NJUlogin.pwdLogin(info['student_id'], info['password'], headers={'User-Agent': info['User_Agent']}, mobileLogin=True)
+	pwdlogin = NJUlogin.pwdLogin(info['student_id'], info['password'], headers={'User-Agent': info['User_Agent']})
 	if not pwdlogin.login(''):
 		return False
 	session = pwdlogin.session
